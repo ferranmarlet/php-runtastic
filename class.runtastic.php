@@ -1,192 +1,189 @@
 <?php
 
-	/*
+    /*
 
-	The MIT License (MIT)
+    The MIT License (MIT)
 
-	Copyright (c) 2014 Timo Schlueter <timo.schlueter@me.com>
+    Copyright (c) 2014 Timo Schlueter <timo.schlueter@me.com>
 
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
 
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-	
-	*/
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+    
+    */
 
-	class Runtastic {
-		private $loginUsername;
-		private $loginPassword;
-		private $loginUrl;
-		private $logoutUrl;
-		private $sessionsApiUrl;
-		private $ch;
-		private $cookieJar;
-		private $loggedIn;
-		private $runtasticUsername;
-		private $runtasticUid;
-		private $runtasticToken;
-		private $runtasticRawData;
-		private $doc;
-		private $timeout;
-		
-		public function __construct() {
-			libxml_use_internal_errors(true);
-			$this->loginUrl = "https://www.runtastic.com/en/d/users/sign_in.json";
-			$this->logoutUrl = "https://www.runtastic.com/en/d/users/sign_out";
-			$this->sessionsApiUrl = "https://www.runtastic.com/api/run_sessions/json";
-			$this->ch = null;
-			$this->doc = new DOMDocument();
-			$this->cookieJar = getcwd() . "/cookiejar";
-			$this->runtasticToken = "";
-			$this->loggedIn = false;
-			$this->timeout = 10;
-		}
-		
-		public function login() {
+    class Runtastic {
+        private $loginUsername;
+        private $loginPassword;
+        private $loginUrl;
+        private $logoutUrl;
+        private $sessionsApiUrl;
+        private $ch;
+        private $cookieJar;
+        private $loggedIn;
+        private $runtasticUsername;
+        private $runtasticUid;
+        private $runtasticToken;
+        private $runtasticRawData;
+        private $doc;
+        private $timeout;
+        private $responseStatusCode;
+        
+        public function __construct() {
+            libxml_use_internal_errors(true);
+            $this->loginUrl = "https://www.runtastic.com/en/d/users/sign_in.json";
+            $this->logoutUrl = "https://www.runtastic.com/en/d/users/sign_out";
+            $this->sessionsApiUrl = "https://www.runtastic.com/api/run_sessions/json";
+            $this->ch = null;
+            $this->doc = new DOMDocument();
+            $this->cookieJar = getcwd() . "/cookiejar";
+            $this->runtasticToken = "";
+            $this->loggedIn = false;
+            $this->timeout = 10;
+        }
+        
+        public function login() {
             if ($this->ch == null) {
                 $this->ch = curl_init();
             }
 
-			$postData = array(
-				"user[email]" => $this->loginUsername,
-				"user[password]" => $this->loginPassword,
-				"authenticity_token" => $this->runtasticToken,
-			);
+            $postData = array(
+                "user[email]" => $this->loginUsername,
+                "user[password]" => $this->loginPassword,
+                "authenticity_token" => $this->runtasticToken,
+            );
 
-			curl_setopt($this->ch, CURLOPT_URL, $this->loginUrl); 
-			curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
-			curl_setopt($this->ch,CURLOPT_POST, count($postData));
-			curl_setopt($this->ch,CURLOPT_POSTFIELDS, $postData);
-			curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
-			curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
+            curl_setopt($this->ch, CURLOPT_URL, $this->loginUrl); 
+            curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
+            curl_setopt($this->ch,CURLOPT_POST, count($postData));
+            curl_setopt($this->ch,CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
+            curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
 
-			$responseOutput = curl_exec($this->ch); 
-			$responseStatus = curl_getinfo($this->ch);
-			
-			$responseOutputJson = json_decode($responseOutput);
+            $responseOutput = curl_exec($this->ch); 
+            $responseStatus = curl_getinfo($this->ch);
 
-			if ($responseStatus["http_code"] == 200) {
-				$this->doc->loadHTML($responseOutputJson->update);
-				$inputTags = $this->doc->getElementsByTagName('input');
-				foreach ($inputTags as $inputTag) {
-					if ($inputTag->getAttribute("name") == "authenticity_token") {
-						$this->runtasticToken = $inputTag->getAttribute("value");
-					}
-				}
-			
-				$aTags = $this->doc->getElementsByTagName('a');
-				foreach ($aTags as $aTag) {
-					if (preg_match("/\/en\/users\/(.*)\/dashboard/", $aTag->getAttribute("href"), $matches)) {
-						$this->runtasticUsername = $matches[1];
-					}
-				}
-				
-				$sessionsUrl = "https://www.runtastic.com/en/users/" . $this->runtasticUsername . "/sport-sessions";
-			
-				curl_setopt($this->ch, CURLOPT_URL, $sessionsUrl);
-				curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
-				curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
-				curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
-				curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, 'GET');
-				curl_setopt($this->ch, CURLOPT_TIMEOUT, $this->timeout);
-				
-				$frontpageOutput = curl_exec($this->ch); 
-								
-				$this->doc->loadHTML($frontpageOutput);
-				$scriptTags = $this->doc->getElementsByTagName('script');
-				foreach ($scriptTags as $scriptTag) {
-					if(strstr($scriptTag->nodeValue, 'index_data')) {
-						$this->runtasticRawData = $scriptTag->nodeValue;
-					}
-				}
+            $this->responseStatusCode = $responseStatus["http_code"];
+            
+            $responseOutputJson = json_decode($responseOutput);
 
-				preg_match("/uid: (.*)\,/", $this->runtasticRawData, $matches);
-				$this->runtasticUid = $matches[1];
-			
-				$this->loggedIn = true;
-				return true;
-			} else {
-				$this->loggedIn = false;
-				return false;
-			}
-		}
-		
-		public function logout() {
-			curl_setopt($this->ch, CURLOPT_URL, $this->logoutUrl);
-			curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
-			curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
-			curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
-			curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, 'GET');
-			curl_setopt($this->ch, CURLOPT_TIMEOUT, $this->timeout);
-			if (curl_exec($this->ch)) {
-				curl_close($this->ch);
+            if ($responseStatus["http_code"] == 200) {
+                $this->doc->loadHTML($responseOutputJson->update);
+                $inputTags = $this->doc->getElementsByTagName('input');
+                foreach ($inputTags as $inputTag) {
+                    if ($inputTag->getAttribute("name") == "authenticity_token") {
+                        $this->runtasticToken = $inputTag->getAttribute("value");
+                    }
+                }
+            
+                $aTags = $this->doc->getElementsByTagName('a');
+                foreach ($aTags as $aTag) {
+                    if (preg_match("/\/en\/users\/(.*)\/dashboard/", $aTag->getAttribute("href"), $matches)) {
+                        $this->runtasticUsername = $matches[1];
+                    }
+                }
+                
+                $sessionsUrl = "https://www.runtastic.com/en/users/" . $this->runtasticUsername . "/sport-sessions";
+            
+                curl_setopt($this->ch, CURLOPT_URL, $sessionsUrl);
+                curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
+                curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
+                curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
+                curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, 'GET');
+                curl_setopt($this->ch, CURLOPT_TIMEOUT, $this->timeout);
+                
+                $frontpageOutput = curl_exec($this->ch); 
+                                
+                $this->doc->loadHTML($frontpageOutput);
+                $scriptTags = $this->doc->getElementsByTagName('script');
+                foreach ($scriptTags as $scriptTag) {
+                    if(strstr($scriptTag->nodeValue, 'index_data')) {
+                        $this->runtasticRawData = $scriptTag->nodeValue;
+                    }
+                }
+
+                preg_match("/uid: (.*)\,/", $this->runtasticRawData, $matches);
+                $this->runtasticUid = $matches[1];
+            
+                $this->loggedIn = true;
+                return true;
+            } else {
+                $this->loggedIn = false;
+                return false;
+            }
+        }
+        
+        public function logout() {
+            curl_setopt($this->ch, CURLOPT_URL, $this->logoutUrl);
+            curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1); 
+            curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
+            curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
+            curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, 'GET');
+            curl_setopt($this->ch, CURLOPT_TIMEOUT, $this->timeout);
+            if (curl_exec($this->ch)) {
+                curl_close($this->ch);
                 $this->ch = null;
                 $this->loggedIn = false;
-				return true;
-			} else {
-				return false;
-			}
-		}
-		
-		public function setUsername($loginUsername) {
-			$this->loginUsername = $loginUsername;
-		}
-		
-		public function setPassword($loginPassword) {
-			$this->loginPassword = $loginPassword;
-		}
-		
-		public function setTimeout($timeout) {
-			$this->timeout = $timeout;
-		}
-		
-		public function getUid() {
-			if ($this->loggedIn) {
-				return $this->runtasticUid;
-			} else {
-				return false;
-			}
-		}
-		
-		public function getUsername() {
-			if ($this->loggedIn) {
-				return $this->runtasticUsername;
-			} else {
-				return false;
-			}
-		}
-		
-		public function getToken() {
-			if ($this->loggedIn) {
-				return $this->runtasticToken;
-			} else {
-				return false;
-			}
-		}
+                return true;
+            } else {
+                return false;
+            }
+        }
+        
+        public function setUsername($loginUsername) {
+            $this->loginUsername = $loginUsername;
+        }
+        
+        public function setPassword($loginPassword) {
+            $this->loginPassword = $loginPassword;
+        }
+        
+        public function setTimeout($timeout) {
+            $this->timeout = $timeout;
+        }
+        
+        public function getUid() {
+            if ($this->loggedIn) {
+                return $this->runtasticUid;
+            } else {
+                return false;
+            }
+        }
+        
+        public function getUsername() {
+            if ($this->loggedIn) {
+                return $this->runtasticUsername;
+            } else {
+                return false;
+            }
+        }
+        
+        public function getToken() {
+            if ($this->loggedIn) {
+                return $this->runtasticToken;
+            } else {
+                return false;
+            }
+        }
 
-		public function getResponseStatusCode() {
-			if (isset($this->ch)) {
-				$curlInfo = curl_getinfo($this->ch);
-				if (isset($curlInfo['http_code'])) {
-					return $curlInfo['http_code'];
-				}
-			}
-			return null;
-		}
-		
+        public function getResponseStatusCode() {
+            return $this->responseStatusCode;
+        }
+        
         /**
          * Returns all activities.
          * If
@@ -241,19 +238,19 @@
                         $items[] = $item[0];
                     }
                 }
-				
-				/* Since we can only get the latest 420 activities, we sort them by ID to get the latest ones */
-				arsort($items);
-				$items = array_splice($items, 0, 419);
+                
+                /* Since we can only get the latest 420 activities, we sort them by ID to get the latest ones */
+                arsort($items);
+                $items = array_splice($items, 0, 419);
 
                 $itemList = implode($items, ",");
-				
+                
                 $postData = array(
                     "user_id" => $this->getUid(),
                     "items" =>  $itemList, 
                     "authenticity_token" => $this->getToken()
                 );
-				
+                
                 curl_setopt($this->ch, CURLOPT_URL, $this->sessionsApiUrl);
                 curl_setopt($this->ch, CURLOPT_RETURNTRANSFER, 1);
                 curl_setopt($this->ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -262,8 +259,12 @@
                 curl_setopt($this->ch, CURLOPT_COOKIEFILE, $this->cookieJar);
                 curl_setopt($this->ch, CURLOPT_COOKIEJAR, $this->cookieJar);
                 curl_setopt($this->ch, CURLOPT_TIMEOUT, $this->timeout);
-				
+                
                 $sessionsOutput = curl_exec($this->ch);
+
+                $curlInfo = curl_getinfo($ch);
+                $this->responseStatusCode = $curlInfo['http_code'];
+
                 $this->logout();
 
                 return new RuntasticActivityList($sessionsOutput);
