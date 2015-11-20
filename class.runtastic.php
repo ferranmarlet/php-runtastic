@@ -262,7 +262,7 @@
                 
                 $sessionsOutput = curl_exec($this->ch);
 
-                $curlInfo = curl_getinfo($ch);
+                $curlInfo = curl_getinfo($this->ch);
                 $this->responseStatusCode = $curlInfo['http_code'];
 
                 $this->logout();
